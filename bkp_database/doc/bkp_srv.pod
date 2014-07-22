@@ -1,0 +1,42 @@
+=head1 NOME
+
+  bkp_srv - Serviço de rotina de backup para bancos de dados PostgreSQL (servidor).
+
+=head1 SINOPSE
+  
+  bkp_srv.pl <arquivo_de_configuração>
+
+=head1 DESCRIÇÃO
+
+  Servidor para execução de backup lógico e rotinas de manutenção básicas (VACUUM ANALYZE) de bancos de dados PostgreSQL utilizando pg_dump.
+
+=head1 ARQUIVO DE CONFIGURAÇÃO DO SERVIDOR
+
+  O arquivo de cconfiguração do servidor é baseado em XML, o qual suporta as seguintes tags:
+  =begin text
+
+  <server>: raiz do arquivo
+  <socket>: seção de configurações de socket <host, porta>. Configurações suportadas: bind_addr (endereço de bind), port (porta) e timeout.
+  <log>: seção de configurações de log do serviço. Configurações suportadas: log_dir (diretório de log)
+  <bkp>: seção de configurações do backup. Configurações suportadas: pg_exec_dir (diretório de executáveis do PostgreSQL) e bkp_dir (diretório onde serão armazenados os backups).
+  
+  =end text
+  
+  Cada uma das tags mencionadas acima devem conter a tag config, com o atributo "name" de valor do nome da configuração, a qual deve ser um dos nomes 
+  citados nas configurações suportadas, e seu respectivo valor.
+
+
+=head1 VER TAMBÉM
+
+  man pg_dump
+  
+=head1 AUTOR
+
+  Lucas Pereira, E<lt>lucas.pereira@dbseller.com.brE<gt>
+
+=head1 LICENÇA
+
+  This library is free software; you can redistribute it and/or modify
+  it under the same terms as Perl itself, either Perl version 5.10.1 or,
+  at your option, any later version of Perl 5 you may have available
+=cut

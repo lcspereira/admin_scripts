@@ -1,0 +1,37 @@
+=head1 NOME
+
+  bkp_database - Serviço de rotina de backup para bancos de dados PostgreSQL (cliente).
+
+=head1 SINOPSE
+  
+  bkp_database.pl <host>:<porta> <arquivo databases>
+
+=head1 DESCRIÇÃO
+
+  Cliente para execução de backup lógico e rotinas de manutenção básicas (VACUUM ANALYZE) de bancos de dados PostgreSQL utilizando pg_dump.
+  Pode ser utilizado tando em modo standalone, como pode utilizado juntamente com sistemas gerenciadores de backup, como o Bacula.
+  
+  Este script foi feito de maneira a ser possível fazer backup de bases em vários clusters em um mesmo servidor.
+
+=head1 ARQUIVO DATABASES
+  
+  O arquivo databases é utilizado somente pelo cliente, e utiliza formato CSV, com as seguintes colunas:
+  I<porta,usuario,senha,nome_da_base,versão_da_base>
+
+  Este arquivo é o que torna possível fazer backup de vários clusters em um mesmo servidor.
+
+=head1 VER TAMBÉM
+
+  DBI
+  
+=head1 AUTOR
+
+  Lucas Pereira, E<lt>lucas.pereira@dbseller.com.brE<gt>
+
+=head1 LICENÇA
+
+  This library is free software; you can redistribute it and/or modify
+  it under the same terms as Perl itself, either Perl version 5.10.1 or,
+  at your option, any later version of Perl 5 you may have available.
+
+=cut

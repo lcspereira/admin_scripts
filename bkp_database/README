@@ -1,0 +1,40 @@
+bkp_database version 2.0
+=========================
+
+bkp_database - Script de backup para bancos de dados PostgreSQL.
+
+Este programa é composto de dois scripts: cliente e servidor.
+
+O servidor deve ser instalado no servidor do banco de dados do qual deverá ser feito backup.
+No servidor, deverá constar a pasta /etc/backup, bem como as outras pastas as quais 
+apontarem o arquivo de configuração. 
+
+Recomenda-se executar este serviço com privilégios de usuário limitado.
+
+O cliente pode ser instalado em um sistema gerenciador de backups, como Bacula, etc...
+Na execução do cliente, deverá ser passada o endereço IP e a porta do servidor (<ip>:<porta),
+e também a localização do arquivo databases.
+
+INSTALAÇÃO
+
+Para instalar, basta executar:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+DEPENDÊNCIAS
+
+  Cliente: DBI, XML::Simple
+  Servidor: XML::Simple
+
+COPYRIGHT AND LICENCE
+
+Copyright (C) 2012 by Lucas Pereira
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.10.1 or,
+at your option, any later version of Perl 5 you may have available.
+
+

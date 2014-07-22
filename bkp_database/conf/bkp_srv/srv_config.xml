@@ -1,0 +1,19 @@
+<server>
+  <!-- Configurações do socket -->
+  <socket>
+    <config name="bind_addr" value="*"/>
+    <config name="port"      value="65000"/>
+    <config name="timeout"   value="30"/>
+  </socket>
+  <!-- Configurações do processo -->
+  <daemon>
+    <config name="log_dir" value="/var/log/backup/"/>
+    <config name="lock_dir" value="/var/run/backup/"/>
+  </daemon>
+  <!-- Configurações do backup -->
+  <bkp>
+    <config name="pg_exec_dir" value="/usr/lib/postgresql/"/>
+    <config name="bkp_dir"     value="/var/backups/postgresql/"/>
+    <config name="pg_sock"     value="/var/run/postgresql/"/>
+  </bkp>
+</server>

@@ -1,0 +1,40 @@
+# =======================================================
+# checkurl.pl - Arquivo de configuração
+# sintaxe: <parâmetro> <valor>
+# =======================================================
+
+# =======================================================
+# Configuração do banco de dados
+# =======================================================
+database_host mentor.dbseller                  # Host do SGBD
+database_port 5434                          # Porta do SGBD
+database_user postgres                         # Usuário do SGBD
+database_password ''                # Senha do SGBD
+database_base squid                         # Base de dados de ACL's
+# =======================================================
+
+
+# =======================================================
+# Configuração de envio de e-mail em caso de erro.
+# =======================================================
+mail_host 172.16.144.254                     # Servidor SMTP
+mail_send 'lucas.pereira@dbseller.com.br'   # Endereço de e-mail
+# =======================================================
+
+# =======================================================
+# Configuração de log
+# =======================================================
+log_file /var/log/squid3/checkurl.log
+# =======================================================
+
+# =======================================================
+# Arquivo whitelist (IP's com acesso liberado)
+# =======================================================
+whitelist_file /etc/squid3/acls/ip_wht
+# =======================================================
+
+# =======================================================
+# Comando do Squid (caminho completo para o executavel)
+# =======================================================
+squid_path /usr/local/squid3.1-dbseller/squid
+# =======================================================

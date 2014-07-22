@@ -1,0 +1,237 @@
+#!/usr/bin/perl
+# =================================================================================
+# bkp_srv.pl
+# =================================================================================
+# Rotina de backup das bases através de pg_dump (servidor)
+# Faz backup das bases informadas pelo cliente.
+# Pode fazer backups em vários clusters diferentes em um mesmo servidor.
+# 
+# @author: Lucas Pereira
+# @since: 22-06-2012
+# =================================================================================
+
+use XML::Simple;
+use IO::Socket::INET;
+use IO::File;
+use File::Copy;
+use Data::Dumper qw(Dumper);
+
+# ==========================================
+# finalize
+# ==========================================
+# Função de callback para tratamento de
+# sinais recebidos pelo processo do
+# servidor.
+# ==========================================
+sub finalize () {
+  $oLog->print ("\n[" . localtime () . "] AVISO: Encerrando servidor da rotina de backup devido à comando do administrador...\n");
+  $oClient->shutdown (2) if ($oClient);
+  $oSockSrv->shutdown (2) if ($oSockSrv);
+  $oLog->close ();
+  unlink ($hXMLConfSrv->{'daemon'}->{'config'}->{'lock_dir'}->{'value'} . "backup.pid");
+  exit 0;
+}
+# ==========================================
+
+die ("Uso: ./bkp_srv.pl <arquivo de configuração XML>") if ($#ARGV < 0);
+
+
+# ==========================================
+# Lendo configurações (XML)
+# ==========================================
+$sPathConfigFile = $ARGV[0];
+$oXML            = XML::Simple->new ();
+$hXMLConfSrv     = $oXML->XMLin ($sPathConfigFile, ValueAttr => {});
+# ==========================================
+
+
+
+$ENV{'PGHOST'}   = $hXMLConfSrv->{'bkp'}->{'config'}->{'pg_sock'}->{'value'};
+# ==========================================
+# Verificação de lock
+# ==========================================
+if (-e $hXMLConfSrv->{'daemon'}->{'config'}->{'lock_dir'}->{'value'} . "backup.pid") {
+  die ("O serviço já está em execução!");
+} else {
+  eval {
+    $oLock = IO::File->new ($hXMLConfSrv->{'daemon'}->{'config'}->{'lock_dir'}->{'value'} . "backup.pid", "w");
+    $oLock->write ($$ . "\n");
+    $oLock->close ();
+  };
+  if ($@) { 
+    $sErro = $@;
+    print STDERR "Não foi possível criar arquivo de lock: $@\n";
+    if (! -d $hXMLConfSrv->{'daemon'}->{'config'}->{'lock_dir'}->{'value'}) {
+      print STDERR "Diretório " . $hXMLConfSrv->{'daemon'}->{'config'}->{'lock_dir'}->{'value'} . " não existe.\n";
+    } elsif (! -w $hXMLConfSrv->{'daemon'}->{'config'}->{'lock_dir'}->{'value'}) {
+      print STDERR "Diretório " . $hXMLConfSrv->{'daemon'}->{'config'}->{'lock_dir'}->{'value'} . " não tem permissão de escrita.\n";
+    }    
+    exit -2;
+  }
+}
+# ==========================================
+
+
+$oLog  = IO::File->new ($hXMLConfSrv->{'daemon'}->{'config'}->{'log_dir'}->{'value'} . "backup.log", "a") or die ($!); # Arquivo de log
+$oLog->autoflush (1);
+$oLog->print ("[" . localtime () . "] Iniciado servidor da rotina de backup...\n");
+$oLog->print ("[" . localtime () . "] Aguardando conexão...\n");
+$oLog->close ();
+
+
+# ==========================
+# Tratamento de sinais
+# ==========================
+$SIG{'TERM'} = 'finalize';
+$SIG{'INT'}  = 'finalize';
+# ==========================
+
+
+while (1) {
+  $oLog->open ($hXMLConfSrv->{'daemon'}->{'config'}->{'log_dir'}->{'value'} . "backup.log", "a") or die ($!);
+  $oSockSrv        = IO::Socket::INET->new (
+                                             LocalPeer => $hXMLConfSrv->{'socket'}->{'config'}->{'bind_addr'}->{'value'},
+                                             LocalPort => $hXMLConfSrv->{'socket'}->{'config'}->{'port'}->{'value'},
+                                             Listen    => 1,
+                                             Proto     => 'tcp',
+                                             Type      => SOCK_STREAM
+                                           );
+  next if (!$oSockSrv); 
+  $oSockSrv->autoflush (1);
+  $oClient = $oSockSrv->accept ();                                   # O servidor está aceitando conexões
+  $oLog->print ("[" . localtime () . "] Recebendo conexão de " . $oClient->peerhost () . "...\n");
+  $oClient->autoflush (1);
+  $oLog->print ("[" . localtime () . "] Iniciando rotina de backup...\n");
+
+  while (1) {
+    eval {
+
+      # ==========================================
+      # Processamento dos dados passados 
+      # pelo cliente
+      # ==========================================
+      @aConfDB = ("port", "user", "password", "database", "version");  # Array com configuraçõe da base a ser feito backup.
+      $oLog->print ("[" . localtime () . "] ");
+      foreach $sConfDB (@aConfDB) {
+        $oClient->recv ($hConfDB{$sConfDB}, 256);
+        if ($sConfDB ne "password") {
+          chop ($hConfDB{$sConfDB});                                     # Retira \n de cada parâmetro da configuração
+          $oLog->print ("$sConfDB=" . $hConfDB{$sConfDB} . ", ");
+        }
+      }
+      $oLog->print ("\n");
+      chop ($hConfDB{'version'});                                     # Corta \n da versão. 
+      # ==========================================
+      
+
+      # ==========================================
+      # Backup da base
+      # ==========================================
+      $oLog->print ("[" . localtime () . "] Fazendo backup da base $hConfDB{'database'}... ");
+      system ("touch /tmp/." . $hConfDB{'database'} . ".pgbkp");
+      chown ($UID, $GID, "/tmp/." . $hConfDB{'database'} . ".pgbkp");
+      system ($hXMLConfSrv->{'bkp'}->{'config'}->{'pg_exec_dir'}->{'value'} . $hConfDB{'version'} . "/bin/pg_dump -i -Fc -Z 9 -U " . $hConfDB{'user'} . " -p " . $hConfDB{'port'} . " " . $hConfDB{'database'} . "> /tmp/." . $hConfDB{'database'} . ".pgbkp");    # O arquivo do backup é gravado 
+                                                                                                                                                                                                                                                                   # provisóriamente no /tmp do servidor (arquivo oculto)
+
+      # Status do backup
+      if ($? == 0) {
+        $oLog->print ("[ OK ]\n");
+        move ("/tmp/." . $hConfDB{'database'} . ".pgbkp", $hXMLConfSrv->{'bkp'}->{'config'}->{'bkp_dir'}->{'value'} . $hConfDB{'database'} . ".pgbkp");      # Move backup da pasta /tmp/ p/ ser disponibilizado ao Bacula.
+        unlink ("/tmp/." . $hConfDB{'database'} . ".pgbkp") if (-e "/tmp/." . $hConfDB{'database'} . ".pgbkp");
+        chown ($UID, $GID, $hXMLConfSrv->{'bkp'}->{'config'}->{'bkp_dir'}->{'value'} . $hConfDB{'database'} . ".pgbkp");
+        chmod (0755, $hXMLConfSrv->{'bkp'}->{'config'}->{'bkp_dir'}->{'value'} . $hConfDB{'database'} . ".pgbkp");
+      } else {
+        $oLog->print ("[ERRO]\n");
+        unlink ("/tmp/." . $hConfDB{'database'} . ".pgbkp");  # Em caso de erro no backup, apaga o backup com problema.
+      }
+      # ==========================================
+      
+      
+      # ==========================================
+      # VACUUM ANALYZE (executado pelo cliente)
+      # ==========================================
+      $oClient->send ("DUMP END\n");                          # Informa ao cliente que o dump terminou
+      $oClient->recv ($_, 20);                                # Recebe sinal do cliente indicando que o mesmo está executando VACUUM ANALYZE na base.
+      $oLog->print ("[" . localtime () . "] Executando VACUUM ANALYZE... ");
+      $oClient->recv ($sVacuumStatus, 1024);                  # Recebe status do VACUUM para escrevê-lo no log
+      chop ($sVacuumStatus);
+      if ($sVacuumStatus eq "OK") {
+        $oLog->print ("[ OK ]\n");
+      } else {
+        $oLog->print ("[ERRO]\n" . "[" . localtime () . "] $sVacuumStatus\n" );
+      }
+      # ==========================================
+
+
+      $oClient->recv ($bNext, 5);                             # Cliente informa se há mais bases para ser feito backup ou não.
+      if ($bNext eq "0\n") {                       
+        $oClient->shutdown (2);                               # Caso não haja, fecha os sockets
+        $oSockSrv->shutdown (2);
+        undef ($oClient);
+        undef ($oSockSrv);
+        last;
+      } elsif ($bNext ne "0\n" && $bNext ne "1\n") {
+        $oLog->print ("\n[" . localtime () . "] AVISO: Recebida mensagem desconhecida do host " . $oClient->peerhost() . " ($bNext)!\n");
+        $oLog->print ("\n[" . localtime () . "] Encerrando conexão com " . $oClient->peerhost() . "...\n");
+        $oClient->shutdown (2);                               # Caso receba uma resposta inesperada, fecha a conexão.
+        $oSockSrv->shutdown (2);
+        undef ($oClient);
+        undef ($oSockSrv);
+        last;
+      }
+      undef (%hConfDB);
+      
+    };
+    if ($@) {
+      $sError = $@;
+      $oLog->print ("$sError\n");
+    }
+  }
+  $oLog->print ("[" . localtime () . "] Terminada rotina de backup!\n");
+  $oLog->close ();
+}
+
+__END__
+
+=head1 NOME
+
+  bkp_srv - Serviço de rotina de backup para bancos de dados PostgreSQL (servidor).
+
+=head1 SINOPSE
+  
+  bkp_srv.pl <arquivo_de_configuração>
+
+=head1 DESCRIÇÃO
+
+  Servidor para execução de backup lógico e rotinas de manutenção básicas (VACUUM ANALYZE) de bancos de dados PostgreSQL utilizando pg_dump.
+
+=head1 ARQUIVO DE CONFIGURAÇÃO DO SERVIDOR
+
+  O arquivo de cconfiguração do servidor é baseado em XML, o qual suporta as seguintes tags:
+  =begin text
+
+  <server>: raiz do arquivo
+  <socket>: seção de configurações de socket <host, porta>. Configurações suportadas: bind_addr (endereço de bind), port (porta) e timeout.
+  <daemon>: seção de configurações do serviço (locks e logs). Configurações suportadas: log_dir (diretório de log) e lock_dir (diretório de lock).
+  <bkp>: seção de configurações do backup. Configurações suportadas: pg_exec_dir (diretório de executáveis do PostgreSQL) e bkp_dir (diretório onde serão armazenados os backups).
+  
+  =end text
+  
+  Cada uma das tags mencionadas acima devem conter a tag config, com o atributo "name" de valor do nome da configuração, a qual deve ser um dos nomes 
+  citados nas configurações suportadas, e seu respectivo valor.
+
+
+=head1 VER TAMBÉM
+
+  man pg_dump
+  
+=head1 AUTOR
+
+  Lucas Pereira, E<lt>lucas.pereira@dbseller.com.brE<gt>
+
+=head1 LICENÇA
+
+  This library is free software; you can redistribute it and/or modify
+  it under the same terms as Perl itself, either Perl version 5.10.1 or,
+  at your option, any later version of Perl 5 you may have available
+=cut
